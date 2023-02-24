@@ -574,22 +574,20 @@ impl CursorController {
                 }
             }
             KeyCode::Down => {
-                if self.cursor_y < number_of_rows {
+                if self.cursor_y < number_of_rows - 1 {
                     self.cursor_y += 1;
                 }
             }
-            KeyCode::Right => {
-                if self.cursor_y < number_of_rows {
-                    match self.cursor_x.cmp(&editor_rows.get_row(self.cursor_y).len()) {
-                        Ordering::Less => self.cursor_x += 1,
-                        Ordering::Equal => {
-                            self.cursor_y += 1;
-                            self.cursor_x = 0
-                        }
-                        _ => {}
+            KeyCode::Right => match self.cursor_x.cmp(&editor_rows.get_row(self.cursor_y).len()) {
+                Ordering::Less => self.cursor_x += 1,
+                Ordering::Equal => {
+                    if self.cursor_y < number_of_rows - 1 {
+                        self.cursor_y += 1;
+                        self.cursor_x = 0
                     }
                 }
-            }
+                _ => {}
+            },
             KeyCode::End => {
                 if self.cursor_y < number_of_rows {
                     self.cursor_x = editor_rows.get_row(self.cursor_y).len();
@@ -1068,9 +1066,7 @@ impl Editor {
             }
             KeyEvent {
                 code:
-                    direction
-                    @
-                    (KeyCode::Up
+                    direction @ (KeyCode::Up
                     | KeyCode::Down
                     | KeyCode::Left
                     | KeyCode::Right
@@ -1088,7 +1084,7 @@ impl Editor {
                 } else {
                     self.output.cursor_controller.cursor_y = cmp::min(
                         self.output.win_size.1 + self.output.cursor_controller.row_offset - 1,
-                        self.output.editor_rows.number_of_rows(),
+                        self.output.editor_rows.number_of_rows() - 1,
                     );
                 }
                 (0..self.output.win_size.1).for_each(|_| {
