@@ -6,9 +6,24 @@ use std::{
 
 use crate::{output::Output, row::Row, syntax_highlighting::SyntaxHighlight, TAB_STOP};
 
+#[derive(PartialEq, Eq)]
+
+pub enum FileType {
+    FILE,
+    DIR,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum EditMode {
+    NORMAL,
+    READONLY,
+}
+
 pub struct EditorRows {
     pub row_contents: Vec<Row>,
     pub filename: Option<PathBuf>,
+    pub file_type: FileType,
+    pub edit_mode: EditMode,
 }
 
 impl EditorRows {
@@ -17,6 +32,8 @@ impl EditorRows {
             None => Self {
                 row_contents: Vec::new(),
                 filename: None,
+                file_type: FileType::FILE,
+                edit_mode: EditMode::NORMAL,
             },
             Some(file) => Self::from_file(file.into(), syntax_highlight),
         }
@@ -30,6 +47,8 @@ impl EditorRows {
             return Self {
                 row_contents: Vec::new(),
                 filename: Some(file),
+                file_type: FileType::FILE,
+                edit_mode: EditMode::NORMAL,
             };
         }
 
@@ -49,6 +68,8 @@ impl EditorRows {
         Self {
             filename: Some(file),
             row_contents,
+            file_type: FileType::FILE,
+            edit_mode: EditMode::NORMAL,
         }
     }
 
