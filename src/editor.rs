@@ -2,7 +2,7 @@ use std::{cmp, path::PathBuf};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::{output::Output, prompt, reader::Reader, QUIT_TIMES};
+use crate::{editor_rows::EditorRows, output::Output, prompt, reader::Reader, QUIT_TIMES};
 
 pub struct Editor {
     reader: Reader,
@@ -17,6 +17,42 @@ impl Editor {
             output: Output::new(),
             quit_times: QUIT_TIMES,
         }
+    }
+
+    fn save(&mut self) -> crossterm::Result<bool> {
+        if matches!(self.output.editor_rows.filename, None) {
+            let prompt =
+                prompt!(&mut self.output, "Save as : {} (ESC to cancel)").map(|it| it.into());
+            if prompt.is_none() {
+                self.output
+                    .status_message
+                    .set_message("Save Aborted".into());
+                return Ok(true);
+            }
+            /* add the following */
+            prompt
+                .as_ref()
+                .and_then(|path: &PathBuf| path.extension())
+                .and_then(|ext| ext.to_str())
+                .map(|ext| {
+                    Output::select_syntax(ext).map(|syntax| {
+                        let highlight = self.output.syntax_highlight.insert(syntax);
+                        for i in 0..self.output.editor_rows.number_of_rows() {
+                            highlight.update_syntax(i, &mut self.output.editor_rows.row_contents)
+                        }
+                    })
+                });
+
+            self.output.editor_rows.filename = prompt
+        }
+        self.output.editor_rows.save().map(|len| {
+            self.output
+                .status_message
+                .set_message(format!("{} bytes written to disk", len));
+            self.output.dirty = 0
+        })?;
+
+        Ok(true)
     }
 
     pub fn process_keypress(&mut self) -> crossterm::Result<bool> {
@@ -70,38 +106,7 @@ impl Editor {
                 code: KeyCode::Char('s'),
                 modifiers: KeyModifiers::CONTROL,
             } => {
-                if matches!(self.output.editor_rows.filename, None) {
-                    let prompt = prompt!(&mut self.output, "Save as : {} (ESC to cancel)")
-                        .map(|it| it.into());
-                    if prompt.is_none() {
-                        self.output
-                            .status_message
-                            .set_message("Save Aborted".into());
-                        return Ok(true);
-                    }
-                    /* add the following */
-                    prompt
-                        .as_ref()
-                        .and_then(|path: &PathBuf| path.extension())
-                        .and_then(|ext| ext.to_str())
-                        .map(|ext| {
-                            Output::select_syntax(ext).map(|syntax| {
-                                let highlight = self.output.syntax_highlight.insert(syntax);
-                                for i in 0..self.output.editor_rows.number_of_rows() {
-                                    highlight
-                                        .update_syntax(i, &mut self.output.editor_rows.row_contents)
-                                }
-                            })
-                        });
-
-                    self.output.editor_rows.filename = prompt
-                }
-                self.output.editor_rows.save().map(|len| {
-                    self.output
-                        .status_message
-                        .set_message(format!("{} bytes written to disk", len));
-                    self.output.dirty = 0
-                })?;
+                self.save()?;
             }
             KeyEvent {
                 code: KeyCode::Char('f'),
@@ -130,6 +135,40 @@ impl Editor {
                 KeyCode::Char(ch) => ch,
                 _ => unreachable!(),
             }),
+            KeyEvent {
+                code: KeyCode::Char('o'),
+                modifiers: KeyModifiers::CONTROL,
+            } => {
+                let open_prompt = prompt!(&mut self.output, "Open file: {} (ESC to cancel)");
+                match open_prompt {
+                    Some(file) => {
+                        if self.output.dirty != 0 {
+                            let save_prompt = prompt!(
+                                &mut self.output,
+                                "You have unsaved changes, save? (y/n) {}"
+                            );
+                            match save_prompt {
+                                Some(answer) => {
+                                    if answer.to_lowercase() == "y" {
+                                        self.save()?;
+                                    }
+                                }
+                                None => {}
+                            }
+                        }
+
+                        self.output.editor_rows =
+                            EditorRows::from_file(file.into(), &mut self.output.syntax_highlight)
+                    }
+                    None => {}
+                }
+            }
+            KeyEvent {
+                code: KeyCode::Char('h'),
+                modifiers: KeyModifiers::CONTROL,
+            } => self.output.status_message.set_message(
+                "HELP: Ctrl-S = Save | Ctrl-Q = Quit | Ctrl-F = Find | Ctrl-O = Open".into(),
+            ),
             _ => {}
         }
         self.quit_times = QUIT_TIMES;

@@ -49,9 +49,7 @@ impl Output {
             editor_contents: EditorContents::new(),
             cursor_controller: CursorController::new(win_size),
             editor_rows: EditorRows::new(&mut syntax_highlight), //modify
-            status_message: StatusMessage::new(
-                "HELP: Ctrl-S = Save | Ctrl-Q = Quit | Ctrl-F = Find".into(),
-            ),
+            status_message: StatusMessage::new("HELP: Ctrl-h".into()),
             dirty: 0,
             search_index: SearchIndex::new(),
             syntax_highlight,
