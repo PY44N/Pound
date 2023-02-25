@@ -26,6 +26,13 @@ impl EditorRows {
         file: PathBuf,
         syntax_highlight: &mut Option<Box<dyn SyntaxHighlight>>,
     ) -> Self {
+        if !file.exists() {
+            return Self {
+                row_contents: Vec::new(),
+                filename: Some(file),
+            };
+        }
+
         let file_contents = fs::read_to_string(&file).expect("Unable to read file");
         let mut row_contents = Vec::new();
         file.extension()
