@@ -1,9 +1,6 @@
 use crossterm::terminal;
-/// Authored by Kofi Otuo <otuokofi@outlook.com>
-///
 use editor::Editor;
 use output::Output;
-use reader::Reader;
 
 const VERSION: &str = "0.0.1";
 const TAB_STOP: usize = 8;

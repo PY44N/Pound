@@ -1,14 +1,8 @@
-use std::{cmp, fs, path::PathBuf};
+use std::{cmp, path::PathBuf};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::{
-    editor_rows::{EditMode, EditorRows, FileType},
-    output::Output,
-    reader::Reader,
-    row::Row,
-    QUIT_TIMES,
-};
+use crate::{editor_rows::FileType, output::Output, reader::Reader, QUIT_TIMES};
 
 pub struct Editor {
     reader: Reader,
@@ -124,7 +118,7 @@ impl Editor {
             } => {
                 let open_prompt: Option<PathBuf> = self
                     .output
-                    .prompt("Open file: {} (ESC to cancel)", None)
+                    .prompt("Open file: {} (ESC to cancel)")
                     .map(|v| v.into());
                 match open_prompt {
                     Some(open_file) => {
