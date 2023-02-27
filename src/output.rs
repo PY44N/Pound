@@ -1,5 +1,5 @@
 use std::{
-    cmp, fs,
+    cmp, env, fs,
     io::{self, stdout, Write},
     path::PathBuf,
 };
@@ -45,17 +45,26 @@ impl Output {
         let win_size = terminal::size()
             .map(|(x, y)| (x as usize, y as usize - 2))
             .unwrap();
-        let mut syntax_highlight = None; // modify
-        Self {
+        let syntax_highlight = None; // modify
+        let mut new_self = Self {
             win_size,
             editor_contents: EditorContents::new(),
             cursor_controller: CursorController::new(win_size),
-            editor_rows: EditorRows::new(&mut syntax_highlight), //modify
+            editor_rows: EditorRows::new(),
             status_message: StatusMessage::new("HELP: Ctrl-h".into()),
             dirty: 0,
             search_index: SearchIndex::new(),
             syntax_highlight,
+        };
+
+        match env::args().nth(1) {
+            Some(file) => new_self
+                .open_file(file.into())
+                .expect("Failed to open file"),
+            None => (),
         }
+
+        new_self
     }
 
     pub fn prompt(
@@ -200,8 +209,12 @@ impl Output {
 
             self.editor_rows = editor_rows;
         } else {
-            self.status_message
-                .set_message("Attempted to non-file path".into());
+            self.editor_rows = EditorRows {
+                row_contents: Vec::new(),
+                filename: Some(open_file),
+                file_type: FileType::FILE,
+                edit_mode: EditMode::NORMAL,
+            }
         }
 
         Ok(())

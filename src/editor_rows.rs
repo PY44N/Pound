@@ -27,15 +27,12 @@ pub struct EditorRows {
 }
 
 impl EditorRows {
-    pub fn new(syntax_highlight: &mut Option<Box<dyn SyntaxHighlight>>) -> Self {
-        match env::args().nth(1) {
-            None => Self {
-                row_contents: Vec::new(),
-                filename: None,
-                file_type: FileType::FILE,
-                edit_mode: EditMode::NORMAL,
-            },
-            Some(file) => Self::from_file(file.into(), syntax_highlight),
+    pub fn new() -> Self {
+        Self {
+            row_contents: Vec::new(),
+            filename: None,
+            file_type: FileType::FILE,
+            edit_mode: EditMode::NORMAL,
         }
     }
 
