@@ -14,7 +14,6 @@ pub mod editor;
 pub mod editor_contents;
 pub mod editor_rows;
 pub mod output;
-pub mod prompt;
 pub mod reader;
 pub mod row;
 pub mod search_index;

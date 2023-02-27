@@ -6,19 +6,33 @@ use std::{
 
 use crate::{output::Output, row::Row, syntax_highlighting::SyntaxHighlight, TAB_STOP};
 
+#[derive(PartialEq, Eq)]
+
+pub enum FileType {
+    FILE,
+    DIR,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum EditMode {
+    NORMAL,
+    READONLY,
+}
+
 pub struct EditorRows {
     pub row_contents: Vec<Row>,
     pub filename: Option<PathBuf>,
+    pub file_type: FileType,
+    pub edit_mode: EditMode,
 }
 
 impl EditorRows {
-    pub fn new(syntax_highlight: &mut Option<Box<dyn SyntaxHighlight>>) -> Self {
-        match env::args().nth(1) {
-            None => Self {
-                row_contents: Vec::new(),
-                filename: None,
-            },
-            Some(file) => Self::from_file(file.into(), syntax_highlight),
+    pub fn new() -> Self {
+        Self {
+            row_contents: Vec::new(),
+            filename: None,
+            file_type: FileType::FILE,
+            edit_mode: EditMode::NORMAL,
         }
     }
 
@@ -26,6 +40,15 @@ impl EditorRows {
         file: PathBuf,
         syntax_highlight: &mut Option<Box<dyn SyntaxHighlight>>,
     ) -> Self {
+        if !file.exists() {
+            return Self {
+                row_contents: Vec::new(),
+                filename: Some(file),
+                file_type: FileType::FILE,
+                edit_mode: EditMode::NORMAL,
+            };
+        }
+
         let file_contents = fs::read_to_string(&file).expect("Unable to read file");
         let mut row_contents = Vec::new();
         file.extension()
@@ -42,6 +65,8 @@ impl EditorRows {
         Self {
             filename: Some(file),
             row_contents,
+            file_type: FileType::FILE,
+            edit_mode: EditMode::NORMAL,
         }
     }
 

@@ -1,11 +1,12 @@
 use std::{
-    cmp,
+    cmp, env, fs,
     io::{self, stdout, Write},
+    path::PathBuf,
 };
 
 use crossterm::{
     cursor,
-    event::KeyCode,
+    event::{KeyCode, KeyEvent, KeyModifiers},
     execute, queue, style,
     terminal::{self, ClearType},
 };
@@ -13,8 +14,9 @@ use crossterm::{
 use crate::{
     cursor_controller::CursorController,
     editor_contents::EditorContents,
-    editor_rows::EditorRows,
-    prompt,
+    editor_rows::{EditMode, EditorRows, FileType},
+    reader::Reader,
+    row::Row,
     search_index::{SearchDirection, SearchIndex},
     status_message::StatusMessage,
     syntax_highlighting::{HighlightType, RustHighlight, SyntaxHighlight},
@@ -43,19 +45,179 @@ impl Output {
         let win_size = terminal::size()
             .map(|(x, y)| (x as usize, y as usize - 2))
             .unwrap();
-        let mut syntax_highlight = None; // modify
-        Self {
+        let syntax_highlight = None; // modify
+        let mut new_self = Self {
             win_size,
             editor_contents: EditorContents::new(),
             cursor_controller: CursorController::new(win_size),
-            editor_rows: EditorRows::new(&mut syntax_highlight), //modify
-            status_message: StatusMessage::new(
-                "HELP: Ctrl-S = Save | Ctrl-Q = Quit | Ctrl-F = Find".into(),
-            ),
+            editor_rows: EditorRows::new(),
+            status_message: StatusMessage::new("HELP: Ctrl-h".into()),
             dirty: 0,
             search_index: SearchIndex::new(),
             syntax_highlight,
+        };
+
+        match env::args().nth(1) {
+            Some(file) => new_self
+                .open_file(file.into())
+                .expect("Failed to open file"),
+            None => (),
         }
+
+        new_self
+    }
+
+    pub fn prompt(
+        &mut self,
+        message: &str,
+        callback: Option<&dyn Fn(&mut Output, &str, KeyCode)>,
+    ) -> Option<String> {
+        let mut input = String::with_capacity(32);
+        loop {
+            self.status_message
+                .set_message(message.replace("{}", &input));
+            match self.refresh_screen() {
+                Ok(_) => {}
+                Err(_) => return None,
+            }
+            let key_event = Reader.read_key().unwrap();
+            match key_event {
+                KeyEvent {
+                    code: KeyCode::Enter,
+                    modifiers: KeyModifiers::NONE,
+                } => {
+                    if !input.is_empty() {
+                        self.status_message.set_message(String::new());
+                        match callback {
+                            Some(c) => c(self, &input, KeyCode::Enter),
+                            None => {}
+                        }
+                        // $callback(output, &input, KeyCode::Enter);
+                        break;
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Esc, ..
+                } => {
+                    self.status_message.set_message(String::new());
+                    input.clear();
+                    match callback {
+                        Some(c) => c(self, &input, KeyCode::Esc),
+                        None => {}
+                    }
+                    // $callback(output, &input, KeyCode::Esc);
+                    break;
+                }
+                KeyEvent {
+                    code: KeyCode::Backspace | KeyCode::Delete,
+                    modifiers: KeyModifiers::NONE,
+                } => {
+                    input.pop();
+                }
+                KeyEvent {
+                    code: code @ (KeyCode::Char(..) | KeyCode::Tab),
+                    modifiers: KeyModifiers::NONE | KeyModifiers::SHIFT,
+                } => {
+                    input.push(match code {
+                        KeyCode::Tab => '\t',
+                        KeyCode::Char(ch) => ch,
+                        _ => unreachable!(),
+                    });
+                }
+                _ => {}
+            }
+            match callback {
+                Some(c) => c(self, &input, key_event.code),
+                None => {}
+            }
+            // $callback(output, &input, key_event.code);
+        }
+        if input.is_empty() {
+            None
+        } else {
+            Some(input)
+        }
+    }
+
+    pub fn save_file(&mut self) -> crossterm::Result<()> {
+        if matches!(self.editor_rows.filename, None) {
+            let prompt = self
+                .prompt("Save as : {} (ESC to cancel)", None)
+                .map(|it| it.into());
+            if prompt.is_none() {
+                self.status_message.set_message("Save Aborted".into());
+                return Ok(());
+            }
+            /* add the following */
+            prompt
+                .as_ref()
+                .and_then(|path: &PathBuf| path.extension())
+                .and_then(|ext| ext.to_str())
+                .map(|ext| {
+                    Output::select_syntax(ext).map(|syntax| {
+                        let highlight = self.syntax_highlight.insert(syntax);
+                        for i in 0..self.editor_rows.number_of_rows() {
+                            highlight.update_syntax(i, &mut self.editor_rows.row_contents)
+                        }
+                    })
+                });
+
+            self.editor_rows.filename = prompt
+        }
+        self.editor_rows.save().map(|len| {
+            self.status_message
+                .set_message(format!("{} bytes written to disk", len));
+            self.dirty = 0
+        })?;
+
+        Ok(())
+    }
+
+    pub fn open_file(&mut self, open_file: PathBuf) -> crossterm::Result<()> {
+        if self.dirty != 0 {
+            let save_prompt = self.prompt("You have unsaved changes, save? (y/n) {}", None);
+            match save_prompt {
+                Some(answer) => {
+                    if answer.to_lowercase() == "y" {
+                        self.save_file()?;
+                    }
+                }
+                None => self.status_message.set_message("Open File Aborted".into()),
+            }
+        }
+
+        if open_file.is_file() {
+            self.editor_rows = EditorRows::from_file(open_file, &mut self.syntax_highlight);
+        } else if open_file.is_dir() {
+            let mut rows = vec![];
+
+            for file in fs::read_dir(open_file).unwrap() {
+                let mut row =
+                    Row::new(file.unwrap().path().to_str().unwrap().into(), String::new());
+
+                EditorRows::render_row(&mut row);
+
+                rows.push(row);
+            }
+
+            let editor_rows = EditorRows {
+                row_contents: rows,
+                filename: None,
+                file_type: FileType::DIR,
+                edit_mode: EditMode::READONLY,
+            };
+
+            self.editor_rows = editor_rows;
+        } else {
+            self.editor_rows = EditorRows {
+                row_contents: Vec::new(),
+                filename: Some(open_file),
+                file_type: FileType::FILE,
+                edit_mode: EditMode::NORMAL,
+            }
+        }
+
+        Ok(())
     }
 
     pub fn clear_screen() -> crossterm::Result<()> {
@@ -150,12 +312,12 @@ impl Output {
 
     pub fn find(&mut self) -> io::Result<()> {
         let cursor_controller = self.cursor_controller;
-        if prompt!(
-            self,
-            "Search: {} (Use ESC / Arrows / Enter)",
-            callback = Output::find_callback
-        )
-        .is_none()
+        if self
+            .prompt(
+                "Search: {} (Use ESC / Arrows / Enter)",
+                Some(&Output::find_callback),
+            )
+            .is_none()
         {
             self.cursor_controller = cursor_controller
         }
@@ -175,6 +337,12 @@ impl Output {
     }
 
     pub fn delete_char(&mut self) {
+        if self.editor_rows.edit_mode == EditMode::READONLY {
+            self.status_message
+                .set_message("Failed to edit readonly buffer".into());
+            return;
+        }
+
         if self.cursor_controller.cursor_y == self.editor_rows.number_of_rows() {
             return;
         }
@@ -205,6 +373,12 @@ impl Output {
     }
 
     pub fn insert_newline(&mut self) {
+        if self.editor_rows.edit_mode == EditMode::READONLY {
+            self.status_message
+                .set_message("Failed to edit readonly buffer".into());
+            return;
+        }
+
         if self.cursor_controller.cursor_x == 0 {
             self.editor_rows
                 .insert_row(self.cursor_controller.cursor_y, String::new())
@@ -236,6 +410,12 @@ impl Output {
     }
 
     pub fn insert_char(&mut self, ch: char) {
+        if self.editor_rows.edit_mode == EditMode::READONLY {
+            self.status_message
+                .set_message("Failed to edit readonly buffer".into());
+            return;
+        }
+
         if self.cursor_controller.cursor_y == self.editor_rows.number_of_rows() {
             self.editor_rows
                 .insert_row(self.editor_rows.number_of_rows(), String::new());
@@ -326,7 +506,7 @@ impl Output {
                     .map(|syntax_highlight| {
                         syntax_highlight.color_row(
                             &render,
-                            &row.highlight[start..start + len],
+                            &row.highlight[start..cmp::min(start + len, row.highlight.len())],
                             &mut self.editor_contents,
                         )
                     })
