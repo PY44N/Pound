@@ -67,7 +67,11 @@ impl Output {
         new_self
     }
 
-    pub fn prompt(
+    pub fn prompt(&mut self, message: &str) -> Option<String> {
+        self.prompt_callback(message, None)
+    }
+
+    pub fn prompt_callback(
         &mut self,
         message: &str,
         callback: Option<&dyn Fn(&mut Output, &str, KeyCode)>,
@@ -142,7 +146,7 @@ impl Output {
     pub fn save_file(&mut self) -> crossterm::Result<()> {
         if matches!(self.editor_rows.filename, None) {
             let prompt = self
-                .prompt("Save as : {} (ESC to cancel)", None)
+                .prompt("Save as : {} (ESC to cancel)")
                 .map(|it| it.into());
             if prompt.is_none() {
                 self.status_message.set_message("Save Aborted".into());
@@ -175,7 +179,7 @@ impl Output {
 
     pub fn open_file(&mut self, open_file: PathBuf) -> crossterm::Result<()> {
         if self.dirty != 0 {
-            let save_prompt = self.prompt("You have unsaved changes, save? (y/n) {}", None);
+            let save_prompt = self.prompt("You have unsaved changes, save? (y/n) {}");
             match save_prompt {
                 Some(answer) => {
                     if answer.to_lowercase() == "y" {
@@ -313,7 +317,7 @@ impl Output {
     pub fn find(&mut self) -> io::Result<()> {
         let cursor_controller = self.cursor_controller;
         if self
-            .prompt(
+            .prompt_callback(
                 "Search: {} (Use ESC / Arrows / Enter)",
                 Some(&Output::find_callback),
             )
