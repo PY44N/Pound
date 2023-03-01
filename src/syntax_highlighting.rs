@@ -2,6 +2,7 @@ use crossterm::{
     queue,
     style::{Color, SetForegroundColor},
 };
+use tree_sitter::{Language, Parser};
 
 use std::cmp;
 
@@ -15,15 +16,15 @@ pub enum HighlightType {
     String,
     CharLiteral,
     Comment,
-    MultilineComment, // add line
+    MultilineComment,
     Other(Color),
 }
 
-pub trait SyntaxHighlight {
+pub trait OldSyntaxHighlight {
     fn extensions(&self) -> &[&str];
     fn file_type(&self) -> &str;
     fn comment_start(&self) -> &str;
-    fn multiline_comment(&self) -> Option<(&str, &str)>; // add line
+    fn multiline_comment(&self) -> Option<(&str, &str)>;
     fn syntax_color(&self, highlight_type: &HighlightType) -> Color;
     fn update_syntax(&self, at: usize, editor_rows: &mut Vec<Row>);
     fn color_row(&self, render: &str, highlight: &[HighlightType], out: &mut EditorContents) {
@@ -49,7 +50,7 @@ pub trait SyntaxHighlight {
 }
 
 #[macro_export]
-macro_rules! syntax_struct {
+macro_rules! old_syntax_struct {
     (
         struct $Name:ident {
             extensions:$ext:expr,
@@ -79,7 +80,7 @@ macro_rules! syntax_struct {
             }
         }
 
-        impl SyntaxHighlight for $Name {
+        impl OldSyntaxHighlight for $Name {
 
             fn comment_start(&self) -> &str {
                 self.comment_start
@@ -230,7 +231,7 @@ macro_rules! syntax_struct {
     };
 }
 
-syntax_struct! {
+old_syntax_struct! {
     struct RustHighlight {
         extensions:["rs"],
         file_type:"rust",
@@ -246,5 +247,20 @@ syntax_struct! {
             ]
         },
         multiline_comment: Some(("/*", "*/"))
+    }
+}
+
+pub struct SyntaxHighlight;
+
+impl SyntaxHighlight {
+    pub fn new() -> Self {
+        let mut parser = Parser::new();
+        parser.set_language(tree_sitter_rust::language()).unwrap();
+
+        let ast = parser.parse("fn main() {}", None).unwrap();
+
+        println!("{:?}", ast);
+
+        Self {}
     }
 }

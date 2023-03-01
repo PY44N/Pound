@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{output::Output, row::Row, syntax_highlighting::SyntaxHighlight, TAB_STOP};
+use crate::{output::Output, row::Row, syntax_highlighting::OldSyntaxHighlight, TAB_STOP};
 
 #[derive(PartialEq, Eq)]
 
@@ -38,7 +38,7 @@ impl EditorRows {
 
     pub fn from_file(
         file: PathBuf,
-        syntax_highlight: &mut Option<Box<dyn SyntaxHighlight>>,
+        syntax_highlight: &mut Option<Box<dyn OldSyntaxHighlight>>,
     ) -> Self {
         if !file.exists() {
             return Self {
