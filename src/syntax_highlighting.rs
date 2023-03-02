@@ -2,11 +2,13 @@ use crossterm::{
     queue,
     style::{Color, SetForegroundColor},
 };
-use tree_sitter::{Language, Parser};
+use tree_sitter_highlight::HighlightConfiguration;
 
-use std::cmp;
+use std::{cmp, fs};
 
 use crate::{editor_contents::EditorContents, row::Row};
+
+use tree_sitter::Language;
 
 #[derive(Copy, Clone)]
 pub enum HighlightType {
@@ -20,7 +22,17 @@ pub enum HighlightType {
     Other(Color),
 }
 
-pub trait OldSyntaxHighlight {
+fn get_row_string(rows: &Vec<Row>) -> String {
+    let mut str = String::new();
+
+    for row in rows {
+        str += &(row.row_content.clone() + "\n");
+    }
+
+    str
+}
+
+pub trait SyntaxHighlight {
     fn extensions(&self) -> &[&str];
     fn file_type(&self) -> &str;
     fn comment_start(&self) -> &str;
@@ -50,7 +62,7 @@ pub trait OldSyntaxHighlight {
 }
 
 #[macro_export]
-macro_rules! old_syntax_struct {
+macro_rules! syntax_struct {
     (
         struct $Name:ident {
             extensions:$ext:expr,
@@ -59,14 +71,16 @@ macro_rules! old_syntax_struct {
             keywords: {
                 $([$color:expr; $($words:expr),*]),*
             },
-            multiline_comment:$ml_comment:expr
+            multiline_comment:$ml_comment:expr,
+            highlight_config:$hl_config:expr
         }
     ) => {
         pub struct $Name {
             pub extensions: &'static [&'static str],
             pub file_type: &'static str,
             pub comment_start:&'static str,
-            pub multiline_comment:Option<(&'static str,&'static str)>
+            pub multiline_comment:Option<(&'static str,&'static str)>,
+            pub highlight_config: HighlightConfiguration
         }
 
         impl $Name {
@@ -75,13 +89,13 @@ macro_rules! old_syntax_struct {
                     extensions: &$ext,
                     file_type: $type,
                     comment_start:$start,
-                    multiline_comment: $ml_comment
+                    multiline_comment: $ml_comment,
+                    highlight_config: $hl_config
                 }
             }
         }
 
-        impl OldSyntaxHighlight for $Name {
-
+        impl SyntaxHighlight for $Name {
             fn comment_start(&self) -> &str {
                 self.comment_start
             }
@@ -231,7 +245,7 @@ macro_rules! old_syntax_struct {
     };
 }
 
-old_syntax_struct! {
+syntax_struct! {
     struct RustHighlight {
         extensions:["rs"],
         file_type:"rust",
@@ -246,21 +260,7 @@ old_syntax_struct! {
                 "char","str","bool"
             ]
         },
-        multiline_comment: Some(("/*", "*/"))
-    }
-}
-
-pub struct SyntaxHighlight;
-
-impl SyntaxHighlight {
-    pub fn new() -> Self {
-        let mut parser = Parser::new();
-        parser.set_language(tree_sitter_rust::language()).unwrap();
-
-        let ast = parser.parse("fn main() {}", None).unwrap();
-
-        println!("{:?}", ast);
-
-        Self {}
+        multiline_comment: Some(("/*", "*/")),
+        highlight_config: HighlightConfiguration::new(tree_sitter_rust::language(), tree_sitter_rust::HIGHLIGHT_QUERY, tree_sitter_rust::INJECTIONS_QUERY, "").unwrap()
     }
 }

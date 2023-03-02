@@ -1,0 +1,4 @@
+fn main() {
+	let num: String = String::from("Hi");
+	println!("{} world", num);
+}

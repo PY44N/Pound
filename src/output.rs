@@ -19,7 +19,7 @@ use crate::{
     row::Row,
     search_index::{SearchDirection, SearchIndex},
     status_message::StatusMessage,
-    syntax_highlighting::{HighlightType, OldSyntaxHighlight, RustHighlight, SyntaxHighlight},
+    syntax_highlighting::{HighlightType, RustHighlight, SyntaxHighlight},
     VERSION,
 };
 
@@ -31,13 +31,12 @@ pub struct Output {
     pub status_message: StatusMessage,
     pub dirty: u64,
     pub search_index: SearchIndex,
-    pub old_syntax_highlight: Option<Box<dyn OldSyntaxHighlight>>,
-    pub syntax_highlight: SyntaxHighlight,
+    pub syntax_highlight: Option<Box<dyn SyntaxHighlight>>,
 }
 
 impl Output {
-    pub fn select_syntax(extension: &str) -> Option<Box<dyn OldSyntaxHighlight>> {
-        let list: Vec<Box<dyn OldSyntaxHighlight>> = vec![Box::new(RustHighlight::new())];
+    pub fn select_syntax(extension: &str) -> Option<Box<dyn SyntaxHighlight>> {
+        let list: Vec<Box<dyn SyntaxHighlight>> = vec![Box::new(RustHighlight::new())];
         list.into_iter()
             .find(|it| it.extensions().contains(&extension))
     }
@@ -55,8 +54,7 @@ impl Output {
             status_message: StatusMessage::new("HELP: Ctrl-h".into()),
             dirty: 0,
             search_index: SearchIndex::new(),
-            old_syntax_highlight: syntax_highlight,
-            syntax_highlight: SyntaxHighlight::new(),
+            syntax_highlight,
         };
 
         match env::args().nth(1) {
@@ -161,7 +159,7 @@ impl Output {
                 .and_then(|ext| ext.to_str())
                 .map(|ext| {
                     Output::select_syntax(ext).map(|syntax| {
-                        let highlight = self.old_syntax_highlight.insert(syntax);
+                        let highlight = self.syntax_highlight.insert(syntax);
                         for i in 0..self.editor_rows.number_of_rows() {
                             highlight.update_syntax(i, &mut self.editor_rows.row_contents)
                         }
@@ -193,7 +191,7 @@ impl Output {
         }
 
         if open_file.is_file() {
-            self.editor_rows = EditorRows::from_file(open_file, &mut self.old_syntax_highlight);
+            self.editor_rows = EditorRows::from_file(open_file, &mut self.syntax_highlight);
         } else if open_file.is_dir() {
             let mut rows = vec![];
 
@@ -369,7 +367,7 @@ impl Output {
                 .join_adjacent_rows(self.cursor_controller.cursor_y);
             self.cursor_controller.cursor_y -= 1;
         }
-        if let Some(it) = self.old_syntax_highlight.as_ref() {
+        if let Some(it) = self.syntax_highlight.as_ref() {
             it.update_syntax(
                 self.cursor_controller.cursor_y,
                 &mut self.editor_rows.row_contents,
@@ -399,7 +397,7 @@ impl Output {
             EditorRows::render_row(current_row);
             self.editor_rows
                 .insert_row(self.cursor_controller.cursor_y + 1, new_row_content);
-            if let Some(it) = self.old_syntax_highlight.as_ref() {
+            if let Some(it) = self.syntax_highlight.as_ref() {
                 it.update_syntax(
                     self.cursor_controller.cursor_y,
                     &mut self.editor_rows.row_contents,
@@ -430,7 +428,7 @@ impl Output {
         self.editor_rows
             .get_editor_row_mut(self.cursor_controller.cursor_y)
             .insert_char(self.cursor_controller.cursor_x, ch);
-        if let Some(it) = self.old_syntax_highlight.as_ref() {
+        if let Some(it) = self.syntax_highlight.as_ref() {
             it.update_syntax(
                 self.cursor_controller.cursor_y,
                 &mut self.editor_rows.row_contents,
@@ -458,7 +456,7 @@ impl Output {
         /* modify the following */
         let line_info = format!(
             "{} | {}/{}",
-            self.old_syntax_highlight
+            self.syntax_highlight
                 .as_ref()
                 .map(|highlight| highlight.file_type())
                 .unwrap_or("no ft"),
@@ -507,7 +505,7 @@ impl Output {
                 let len = cmp::min(render.len().saturating_sub(column_offset), screen_columns);
                 let start = if len == 0 { 0 } else { column_offset };
                 let render = render.chars().skip(start).take(len).collect::<String>();
-                self.old_syntax_highlight
+                self.syntax_highlight
                     .as_ref()
                     .map(|syntax_highlight| {
                         syntax_highlight.color_row(

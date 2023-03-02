@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{output::Output, row::Row, syntax_highlighting::OldSyntaxHighlight, TAB_STOP};
+use crate::{output::Output, row::Row, syntax_highlighting::SyntaxHighlight, TAB_STOP};
 
 #[derive(PartialEq, Eq)]
 
@@ -38,7 +38,7 @@ impl EditorRows {
 
     pub fn from_file(
         file: PathBuf,
-        syntax_highlight: &mut Option<Box<dyn OldSyntaxHighlight>>,
+        syntax_highlight: &mut Option<Box<dyn SyntaxHighlight>>,
     ) -> Self {
         if !file.exists() {
             return Self {
@@ -109,6 +109,16 @@ impl EditorRows {
                 row.render.push(c);
             }
         });
+    }
+
+    pub fn get_string(&self) -> String {
+        let mut str = String::new();
+
+        for row in &self.row_contents {
+            str += &(row.row_content.clone() + "\n");
+        }
+
+        str
     }
 
     pub fn insert_row(&mut self, at: usize, contents: String) {
